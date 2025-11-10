@@ -1,10 +1,4 @@
-## Summary
-- Adds SharePoint Audit Agent MVP (PowerShell + Python + Gemini/Claude wrappers)
 
-## Testing
-- [ ] Ran Install-Modules.ps1
-- [ ] `python sharepoint-audit-agent/agent/python/audit_agent.py --help`
-- [ ] (Optional) Dry-run against a non-production site
+Summary
 
-## Docs
-- [ ] Updated QUICKSTART/README if needed
+Adds SharePoint Audit Agent MVP (wrapper + orchestrator + wrappers + docs)

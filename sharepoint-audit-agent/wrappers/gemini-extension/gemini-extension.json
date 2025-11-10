@@ -6,7 +6,7 @@
     "audit": {
       "description": "Run a SharePoint audit for a single site or CSV list.",
       "shell": true,
-      "command": "python ./sharepoint-audit-agent/agent/python/audit_agent.py --tenant-id {{tenant_id}} --app-id {{app_id}} --pfx-path {{pfx_path}} --script-path \"./sharepoint-audit-agent/agent/powershell/Site-Audit.ps1\" {{#site_url}}--site-url {{site_url}}{{/site_url}} {{#csv}}--csv {{csv}}{{/csv}} {{#internal_domains}}--internal-domains {{internal_domains}}{{/internal_domains}} --output ./runs"
+      "command": "python ./sharepoint-audit-agent/agent/python/audit_agent.py --tenant-id {{tenant_id}} --app-id {{app_id}} --pfx-path {{pfx_path}} {{#site_url}}--site-url {{site_url}}{{/site_url}} {{#csv}}--csv {{csv}}{{/csv}} {{#internal_domains}}--internal-domains {{internal_domains}}{{/internal_domains}} --output ./runs"
     }
   }
 }

@@ -2,7 +2,7 @@
 /certs/
 /.env
 *.pfx
-__pycache__/
+pycache/
 *.pyc
 .vscode/
 .DS_Store
