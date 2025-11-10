@@ -26,6 +26,12 @@ try {
 
 # 2) Prepare args for original script (non-interactive if supported)
 $origArgs = @()
+$origArgs += @(
+  '-Tenant', $Tenant,
+  '-ClientId', $ClientId,
+  '-CertificatePath', $CertificatePath,
+  '-CertificatePassword', $CertificatePassword
+)
 if ($AutoConfirm) { $origArgs += '-AutoConfirm' }
 if ($MaxItemsToScan) { $origArgs += @('-MaxItemsToScan', $MaxItemsToScan) }
 if ($BatchSize)      { $origArgs += @('-BatchSize', $BatchSize) }
@@ -35,6 +41,9 @@ $origArgs += @('-SiteUrl', $Url, '-Url', $Url)
 
 if ($InternalDomains -and $InternalDomains.Count -gt 0) {
   $origArgs += @('-InternalDomains', $InternalDomains)
+}
+if ($EmitJsonPath) {
+  $origArgs += @('-EmitJsonPath', $EmitJsonPath)
 }
 
 Write-Host "[Wrapper] Running original script: $OriginalScriptPath $($origArgs -join ' ')"
