@@ -1,9 +1,10 @@
-# SharePoint Audit Agent (MVP)
 
-Packaged audit workflow for SharePoint Online:
-- Certificate-based app-only auth (Sites.Selected)
-- PowerShell scan → JSON
-- Python analysis → Markdown + HTML
-- Claude Skill + Gemini CLI Extension wrappers
+SharePoint Audit Agent (MVP)
 
-See **QUICKSTART.md** for usage.
+Wrapper preserves your large, production script (no modifications).
+
+Python orchestrator grants Sites.Selected, calls the wrapper, analyzes JSON.
+
+Claude Skill and Gemini Extension provide guided UX for non-technical users.
+
+See QUICKSTART.md for usage.

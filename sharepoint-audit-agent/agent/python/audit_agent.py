@@ -38,7 +38,6 @@ class RunContext:
         return RunContext(base, run_dir, logs)
 
 def derive_admin_url(site_url: str) -> str:
-    import re
     m = re.match(r"https://([a-zA-Z0-9-]+)\.sharepoint\.com/", site_url)
     if not m: raise ValueError(f"Unsupported SharePoint URL: {site_url}")
     tenant = m.group(1)
@@ -63,19 +62,20 @@ def grant_sites_selected(site_url: str, tenant: str, app_id: str, pfx_path: Path
     """)
     return run([POWERSHELL, "-NoProfile", "-Command", ps])
 
-def run_audit_script(script_path: Path, site_url: str, tenant: str, app_id: str, pfx_path: Path, pfx_pass: str,
-                     internal_domains: list[str], out_dir: Path, max_items: int = 50000, batch_size: int = 200,
-                     time_budget_minutes: int = 60):
+def run_wrapper(wrapper_path: Path, site_url: str, tenant: str, app_id: str, pfx_path: Path, pfx_pass: str,
+                original_script_path: Path, internal_domains: list[str], out_dir: Path,
+                max_items: int = 50000, batch_size: int = 200, time_budget_minutes: int = 60):
     emit_json = out_dir / "audit.json"
     internal = ' '.join([f"'{d}'" for d in internal_domains]) if internal_domains else ""
     sec_pass = pfx_pass.replace("'", "''")
     ps = textwrap.dedent(f"""
         $sec = ConvertTo-SecureString -String '{sec_pass}' -AsPlainText -Force
-        & '{script_path}' `
+        & '{wrapper_path}' `
           -Url '{site_url}' -Tenant '{tenant}' -ClientId '{app_id}' `
           -CertificatePath '{pfx_path}' -CertificatePassword $sec `
+          -OriginalScriptPath '{original_script_path}' `
           -AutoConfirm -EmitJsonPath '{emit_json}' -MaxItemsToScan {max_items} -BatchSize {batch_size} `
-          -InternalDomains {internal}
+          -HtmlSearchDir '{out_dir}' -InternalDomains {internal}
         if ($LASTEXITCODE) {{ exit $LASTEXITCODE }}
     """)
     run([POWERSHELL, "-NoProfile", "-Command", ps], timeout=time_budget_minutes*60)
@@ -89,30 +89,30 @@ DEFAULT_THRESHOLDS = {
 
 CSS = "body{font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem} h1{font-size:1.8rem} h2{font-size:1.3rem;margin-top:2rem} code,pre{background:#f6f8fa;border:1px solid #eaecef;border-radius:6px;padding:.2rem .4rem}"
 
-def analyze(json_path: Path, thresholds: dict, internal_domains_supplied: bool) -> tuple[str,str]:
+def analyze(json_path: Path, thresholds: dict, internal_provided: bool):
     data = json.loads(Path(json_path).read_text(encoding="utf-8"))
-    metrics = data.get("metrics", {})
+    m = data.get("metrics", {})
     counts = {
-        "unique_items": metrics.get("itemsWithUniquePermissions") or 0,
-        "external_identities": metrics.get("externalUsers") or 0,
-        "direct_web_assignments": metrics.get("webDirectAssignments") or 0,
-        "groups_without_owner": metrics.get("orphanedGroups") or 0,
-        "anyone_or_everyone": bool(metrics.get("anyoneOrEveryoneAtWeb")),
-        "external_owner": bool(metrics.get("externalOwnerPresent")),
+        "unique_items": m.get("itemsWithUniquePermissions") or m.get("uniqueItemPermissionsCount") or 0,
+        "external_identities": m.get("externalUsers") or m.get("externalIdentityCount") or 0,
+        "direct_web_perms": m.get("webDirectAssignments") or 0,
+        "groups_wo_owner": m.get("orphanedGroups") or 0,
+        "anyone_or_everyone": bool(m.get("anyoneOrEveryoneAtWeb")),
+        "external_owner": bool(m.get("externalOwnerPresent")),
     }
     findings=[]
     if thresholds["critical"]["anyone_or_everyone"] and counts["anyone_or_everyone"]:
-        findings.append(("Critical","'Anyone/Everyone' access detected at web/site scope."))
+        findings.append(("Critical","'Anyone/Everyone' at web/site scope."))
     if thresholds["critical"]["external_owner"] and counts["external_owner"]:
-        findings.append(("Critical","Guest/external user with Owner role detected."))
-    if thresholds["high"]["direct_web_perms"] and counts["direct_web_assignments"]:
-        findings.append(("High", f"Direct user permissions at web scope: {counts['direct_web_assignments']}") )
+        findings.append(("Critical","External user with Owner role detected."))
+    if thresholds["high"]["direct_web_perms"] and counts["direct_web_perms"]:
+        findings.append(("High", f"Direct user perms at web: {counts['direct_web_perms']}") )
     if counts["unique_items"] > thresholds["high"]["unique_items_gt"]:
-        findings.append(("High", f"Items with unique permissions: {counts['unique_items']}") )
+        findings.append(("High", f"Items with unique perms: {counts['unique_items']}") )
     if counts["external_identities"] >= thresholds["medium"]["external_item_identities_gte"]:
-        findings.append(("Medium", f"External identities with item-level access: {counts['external_identities']}") )
-    if thresholds["medium"]["group_without_owner"] and counts["groups_without_owner"]:
-        findings.append(("Medium", f"SharePoint groups without owners: {counts['groups_without_owner']}") )
+        findings.append(("Medium", f"External identities with item access: {counts['external_identities']}") )
+    if thresholds["medium"]["group_without_owner"] and counts["groups_wo_owner"]:
+        findings.append(("Medium", f"SP groups without owners: {counts['groups_wo_owner']}") )
 
     lines = [
         "# SharePoint Audit — Findings & Recommendations","",
@@ -120,22 +120,22 @@ def analyze(json_path: Path, thresholds: dict, internal_domains_supplied: bool) 
         "## Summary","",
         f"- Items with unique permissions: **{counts['unique_items']}**",
         f"- External identities (item-level): **{counts['external_identities']}**",
-        f"- Direct web assignments: **{counts['direct_web_assignments']}**",
-        f"- Groups without owners: **{counts['groups_without_owner']}**",
+        f"- Direct web assignments: **{counts['direct_web_perms']}**",
+        f"- Groups without owners: **{counts['groups_wo_owner']}**",
         f"- Anyone/Everyone at web/site: **{counts['anyone_or_everyone']}**",
         f"- External Owner present: **{counts['external_owner']}**","",
         "## Risk Ratings","",
     ]
     if findings:
-        for lvl, msg in findings: lines.append(f"- **{lvl}** — {msg}")
+        for lvl,msg in findings: lines.append(f"- **{lvl}** — {msg}")
     else:
         lines.append("- No risks met the configured thresholds.")
     lines += ["","## Recommendations (PnP Snippets)","",
               "- Review anonymous sharing & site sharing settings.",
-              "- Remove direct web permissions where unjustified.",
+              "- Remove direct web permissions at web scope.",
               "- Reduce item-level unique permissions where possible.",
               "- Ensure each SharePoint group has an owner.","","---",
-              "_PII notice: contains user emails and access data. Handle per policy._"]
+              "_PII notice: contains user emails and access data._"]
     md = "\n".join(lines)
     try:
         import markdown
@@ -146,12 +146,13 @@ def analyze(json_path: Path, thresholds: dict, internal_domains_supplied: bool) 
     return md, html
 
 def main():
-    ap = argparse.ArgumentParser(description="SharePoint Audit Agent — MVP")
+    ap = argparse.ArgumentParser(description="SharePoint Audit Agent — Wrapper mode")
     ap.add_argument("--tenant-id", required=True)
     ap.add_argument("--app-id", required=True)
     ap.add_argument("--pfx-path", required=True)
     ap.add_argument("--pfx-pass-env", default="PFX_PASS")
-    ap.add_argument("--script-path", required=True)
+    ap.add_argument("--wrapper-path", default="./sharepoint-audit-agent/agent/powershell/run_audit.ps1")
+    ap.add_argument("--original-script-path", default="./sharepoint-audit-agent/agent/powershell/Original-Site-Audit.ps1")
     m = ap.add_mutually_exclusive_group(required=True)
     m.add_argument("--site-url"); m.add_argument("--csv")
     ap.add_argument("--internal-domains", nargs="*", default=[])
@@ -167,7 +168,7 @@ def main():
     out_root = Path(args.output).expanduser().resolve(); out_root.mkdir(parents=True, exist_ok=True)
     run_dir = RunContext.create(out_root).run_dir
 
-    # Collect sites
+    # Sites collection
     sites=[]
     if args.site_url: sites=[args.site_url]
     else:
@@ -189,8 +190,9 @@ def main():
 
         try:
             print(f"[audit] {site}")
-            arts = run_audit_script(Path(args.script_path), site, args.tenant_id, args.app_id, Path(args.pfx_path),
-                                    pfx_pass, args.internal_domains, site_dir, args.max_items, args.batch_size, args.time_budget_minutes)
+            arts = run_wrapper(Path(args.wrapper_path), site, args.tenant_id, args.app_id, Path(args.pfx_path),
+                               pfx_pass, Path(args.original_script_path), args.internal_domains, site_dir,
+                               args.max_items, args.batch_size, args.time_budget_minutes)
         except Exception as e:
             print(f"Audit failed for {site}: {e}", file=sys.stderr); continue
 
