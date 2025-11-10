@@ -25,25 +25,70 @@ try {
 }
 
 # 2) Prepare args for original script (non-interactive if supported)
-$origArgs = @()
-$origArgs += @(
-  '-Tenant', $Tenant,
-  '-ClientId', $ClientId,
-  '-CertificatePath', $CertificatePath,
-  '-CertificatePassword', $CertificatePassword
-)
-if ($AutoConfirm) { $origArgs += '-AutoConfirm' }
-if ($MaxItemsToScan) { $origArgs += @('-MaxItemsToScan', $MaxItemsToScan) }
-if ($BatchSize)      { $origArgs += @('-BatchSize', $BatchSize) }
+if (-not (Test-Path $OriginalScriptPath)) {
+  throw "Original script not found at $OriginalScriptPath"
+}
 
-# Some scripts accept -SiteUrl or -Url; we pass both when harmless:
-$origArgs += @('-SiteUrl', $Url, '-Url', $Url)
+$origParamMetadata = $null
+$origMetadataAvailable = $false
+try {
+  $origParamMetadata = (Get-Command -Name $OriginalScriptPath -ErrorAction Stop).Parameters
+  $origMetadataAvailable = $true
+} catch {
+  Write-Verbose "[Wrapper] Could not inspect parameters for $OriginalScriptPath: $_"
+}
+
+function ShouldPassParam([string]$name, [bool]$default = $true) {
+  if ($origMetadataAvailable) {
+    return $origParamMetadata.ContainsKey($name)
+  }
+  return $default
+}
+
+if ($origMetadataAvailable) {
+  foreach ($req in @('Url','Tenant','ClientId','CertificatePath','CertificatePassword')) {
+    if (-not (ShouldPassParam $req)) {
+      throw "Original script at $OriginalScriptPath does not declare required parameter -$req."
+    }
+  }
+}
+
+$origArgs = @()
+if (ShouldPassParam 'Tenant') { $origArgs += @('-Tenant', $Tenant) }
+if (ShouldPassParam 'ClientId') { $origArgs += @('-ClientId', $ClientId) }
+if (ShouldPassParam 'CertificatePath') { $origArgs += @('-CertificatePath', $CertificatePath) }
+if (ShouldPassParam 'CertificatePassword') { $origArgs += @('-CertificatePassword', $CertificatePassword) }
+
+if ($AutoConfirm) {
+  if (ShouldPassParam 'AutoConfirm') { $origArgs += '-AutoConfirm' }
+  elseif ($origMetadataAvailable) { Write-Verbose "[Wrapper] Original script does not accept -AutoConfirm; skipping." }
+}
+if ($MaxItemsToScan) {
+  if (ShouldPassParam 'MaxItemsToScan') { $origArgs += @('-MaxItemsToScan', $MaxItemsToScan) }
+  elseif ($origMetadataAvailable) { Write-Verbose "[Wrapper] Original script does not accept -MaxItemsToScan; skipping." }
+}
+if ($BatchSize) {
+  if (ShouldPassParam 'BatchSize') { $origArgs += @('-BatchSize', $BatchSize) }
+  elseif ($origMetadataAvailable) { Write-Verbose "[Wrapper] Original script does not accept -BatchSize; skipping." }
+}
+
+if (ShouldPassParam 'SiteUrl' $false) {
+  $origArgs += @('-SiteUrl', $Url)
+}
+if (ShouldPassParam 'Url') {
+  $origArgs += @('-Url', $Url)
+} elseif (-not (ShouldPassParam 'SiteUrl' $false)) {
+  # If neither Url nor SiteUrl is declared (unexpected), still attempt Url.
+  $origArgs += @('-Url', $Url)
+}
 
 if ($InternalDomains -and $InternalDomains.Count -gt 0) {
-  $origArgs += @('-InternalDomains', $InternalDomains)
+  if (ShouldPassParam 'InternalDomains') { $origArgs += @('-InternalDomains', $InternalDomains) }
+  elseif ($origMetadataAvailable) { Write-Verbose "[Wrapper] Original script does not accept -InternalDomains; skipping." }
 }
 if ($EmitJsonPath) {
-  $origArgs += @('-EmitJsonPath', $EmitJsonPath)
+  if (ShouldPassParam 'EmitJsonPath') { $origArgs += @('-EmitJsonPath', $EmitJsonPath) }
+  elseif ($origMetadataAvailable) { Write-Verbose "[Wrapper] Original script does not accept -EmitJsonPath; skipping." }
 }
 
 Write-Host "[Wrapper] Running original script: $OriginalScriptPath $($origArgs -join ' ')"
