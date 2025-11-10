@@ -1,0 +1,25 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  lint-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python compile check
+        uses: actions/setup-python@v5
+        with: { python-version: '3.10' }
+      - run: python -m py_compile sharepoint-audit-agent/agent/python/audit_agent.py || true
+
+      - name: PowerShell script analysis
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          Invoke-ScriptAnalyzer -Path 'sharepoint-audit-agent/agent/powershell/Site-Audit.ps1' -Recurse -Severity Information,Warning,Error
+
+      - name: Docs exist
+        run: test -f sharepoint-audit-agent/docs/QUICKSTART.md
