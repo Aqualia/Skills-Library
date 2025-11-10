@@ -146,9 +146,9 @@ try {
   $lists = @()
 }
 
-$scanned = 0
+$script:scannedCount = 0
 foreach ($list in $lists) {
-  if ($scanned -ge $MaxItemsToScan) { break }
+  if ($script:scannedCount -ge $MaxItemsToScan) { break }
 
   $listName = $list.Title
   $listUrl  = $list.RootFolder.ServerRelativeUrl
@@ -158,8 +158,8 @@ foreach ($list in $lists) {
     Invoke-ForEachListItemStreaming -List $list -PageSize $BatchSize -Handler {
       param($item)
 
-      if ($script:scanned -ge $MaxItemsToScan) { return }
-      $script:scanned++
+      if ($script:scannedCount -ge $MaxItemsToScan) { return }
+      $script:scannedCount++
 
       # Unique permissions?
       $hasUnique = $false
@@ -210,7 +210,7 @@ foreach ($list in $lists) {
   }
 }
 
-$metrics.totalItemsScanned = $scanned
+$metrics.totalItemsScanned = $script:scannedCount
 
 # ---------- Compose report object ----------
 $reportObj = [ordered]@{

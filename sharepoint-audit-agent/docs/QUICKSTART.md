@@ -22,6 +22,8 @@ python ./sharepoint-audit-agent/agent/python/audit_agent.py \
   --output ./runs
 ```
 
+Optional: add `--sites-selected-permission Write` only if the audit truly needs write access (default is Read).
+
 ## CSV run
 
 Create `sharepoint-audit-agent/samples/sites.csv`:
@@ -42,3 +44,5 @@ python ./sharepoint-audit-agent/agent/python/audit_agent.py \
   --csv ./sharepoint-audit-agent/samples/sites.csv \
   --output ./runs
 ```
+
+Optional: add `--sites-selected-permission Write` only if write access is required.

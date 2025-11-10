@@ -43,21 +43,28 @@ def derive_admin_url(site_url: str) -> str:
     tenant = m.group(1)
     return f"https://{tenant}-admin.sharepoint.com"
 
-def grant_sites_selected(site_url: str, tenant: str, app_id: str, pfx_path: Path, pfx_pass: str, display_name="Audit Agent"):
+def grant_sites_selected(site_url: str, tenant: str, app_id: str, pfx_path: Path, pfx_pass: str,
+                         display_name="Audit Agent", permission: str = "Read"):
+    if permission not in {"Read", "Write"}:
+        raise ValueError("permission must be 'Read' or 'Write'")
     admin_url = derive_admin_url(site_url)
+    safe_pass = pfx_pass.replace("'", "''")
     ps = textwrap.dedent(f"""
-        $sec = ConvertTo-SecureString -String '{pfx_pass.replace("'", "''")}' -AsPlainText -Force
+        $sec = ConvertTo-SecureString -String '{safe_pass}' -AsPlainText -Force
         Connect-PnPOnline -Url '{admin_url}' -Tenant '{tenant}' -ClientId '{app_id}' -CertificatePath '{pfx_path}' -CertificatePassword $sec
         try {{
             $existing = Get-PnPAzureADAppSitePermission -Site '{site_url}' -ErrorAction SilentlyContinue | Where-Object {{$_.AppId -eq '{app_id}'}}
             if ($existing) {{
-                if ($existing.Permissions -notcontains 'Write') {{
-                    Grant-PnPAzureADAppSitePermission -AppId '{app_id}' -DisplayName '{display_name}' -Site '{site_url}' -Permissions Write | Out-Null
+                if ($existing.Permissions -notcontains '{permission}') {{
+                    Set-PnPAzureADAppSitePermission -Site '{site_url}' -PermissionId $existing.Id -Permissions {permission} | Out-Null
+                    Write-Host "Updated existing Sites.Selected grant to {permission} on {site_url}"
+                }} else {{
+                    Write-Host "Existing Sites.Selected grant already {permission} on {site_url}"
                 }}
             }} else {{
-                Grant-PnPAzureADAppSitePermission -AppId '{app_id}' -DisplayName '{display_name}' -Site '{site_url}' -Permissions Write | Out-Null
+                Grant-PnPAzureADAppSitePermission -AppId '{app_id}' -DisplayName '{display_name}' -Site '{site_url}' -Permissions {permission} | Out-Null
+                Write-Host "Granted Sites.Selected:{permission} on {site_url}"
             }}
-            Write-Host "Granted Sites.Selected:Write on {site_url}"
         }} finally {{ Disconnect-PnPOnline -ErrorAction SilentlyContinue }}
     """)
     return run([POWERSHELL, "-NoProfile", "-Command", ps])
@@ -66,7 +73,10 @@ def run_wrapper(wrapper_path: Path, site_url: str, tenant: str, app_id: str, pfx
                 original_script_path: Path, internal_domains: list[str], out_dir: Path,
                 max_items: int = 50000, batch_size: int = 200, time_budget_minutes: int = 60):
     emit_json = out_dir / "audit.json"
-    internal = ' '.join([f"'{d}'" for d in internal_domains]) if internal_domains else ""
+    internal_arg = ""
+    if internal_domains:
+        quoted = ' '.join([f"'{d}'" for d in internal_domains])
+        internal_arg = f"-InternalDomains {quoted}"
     sec_pass = pfx_pass.replace("'", "''")
     ps = textwrap.dedent(f"""
         $sec = ConvertTo-SecureString -String '{sec_pass}' -AsPlainText -Force
@@ -75,7 +85,7 @@ def run_wrapper(wrapper_path: Path, site_url: str, tenant: str, app_id: str, pfx
           -CertificatePath '{pfx_path}' -CertificatePassword $sec `
           -OriginalScriptPath '{original_script_path}' `
           -AutoConfirm -EmitJsonPath '{emit_json}' -MaxItemsToScan {max_items} -BatchSize {batch_size} `
-          -HtmlSearchDir '{out_dir}' -InternalDomains {internal}
+          -HtmlSearchDir '{out_dir}' {internal_arg}
         if ($LASTEXITCODE) {{ exit $LASTEXITCODE }}
     """)
     run([POWERSHELL, "-NoProfile", "-Command", ps], timeout=time_budget_minutes*60)
@@ -156,6 +166,7 @@ def main():
     m = ap.add_mutually_exclusive_group(required=True)
     m.add_argument("--site-url"); m.add_argument("--csv")
     ap.add_argument("--internal-domains", nargs="*", default=[])
+    ap.add_argument("--sites-selected-permission", choices=["Read","Write"], default="Read")
     ap.add_argument("--output", required=True)
     ap.add_argument("--max-items", type=int, default=50000)
     ap.add_argument("--batch-size", type=int, default=200)
@@ -184,7 +195,8 @@ def main():
 
         try:
             print(f"[grant] {site}")
-            grant_sites_selected(site, args.tenant_id, args.app_id, Path(args.pfx_path), pfx_pass)
+            grant_sites_selected(site, args.tenant_id, args.app_id, Path(args.pfx_path), pfx_pass,
+                                 permission=args.sites_selected_permission)
         except Exception as e:
             print(f"Grant failed for {site}: {e}", file=sys.stderr); continue
 

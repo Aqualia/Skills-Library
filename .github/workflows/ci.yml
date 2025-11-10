@@ -13,13 +13,13 @@ jobs:
       - name: Python compile check
         uses: actions/setup-python@v5
         with: { python-version: '3.10' }
-      - run: python -m py_compile sharepoint-audit-agent/agent/python/audit_agent.py || true
+      - run: python -m py_compile sharepoint-audit-agent/agent/python/audit_agent.py
 
       - name: PowerShell script analysis
         shell: pwsh
         run: |
           Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
-          Invoke-ScriptAnalyzer -Path 'sharepoint-audit-agent/agent/powershell/Site-Audit.ps1' -Recurse -Severity Information,Warning,Error
+          Invoke-ScriptAnalyzer -Path 'sharepoint-audit-agent/agent/powershell' -Recurse -Severity Information,Warning,Error
 
       - name: Docs exist
         run: test -f sharepoint-audit-agent/docs/QUICKSTART.md
