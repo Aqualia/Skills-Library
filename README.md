@@ -8,7 +8,7 @@ Aqualia's open skills catalog brings world-class SharePoint security automation 
 - Certificates + Sites.Selected app-only access to enumerate web/list/item permissions safely.
 - PowerShell wrapper preserves legacy scripts while emitting normalized JSON for downstream analysis.
 - Python orchestrator handles consent grants, batching, markdown/HTML rendering, and LLM-friendly outputs.
-- Claude Skill (`sharepoint-audit-agent/wrappers/claude-skill/SKILL.md`) and Gemini Extension (`sharepoint-audit-agent/wrappers/gemini-extension/gemini-extension.json`) expose the workflow inside IDEs with zero server dependencies.
+- Claude Skill (`sharepoint-audit-agent/wrappers/claude-skill/SKILL.md`) and Gemini Extension (`gemini-extension.json`) expose the workflow inside IDEs with zero server dependencies.
 
 Read the detailed quickstart at [`sharepoint-audit-agent/docs/QUICKSTART.md`](sharepoint-audit-agent/docs/QUICKSTART.md).
 

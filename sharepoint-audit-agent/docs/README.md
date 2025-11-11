@@ -9,7 +9,7 @@ This skill packages a hardened PowerShell scan with an orchestration layer tailo
 
 ## Supported IDE Integrations
 - **Claude Code Skill** – Auto-discovered via `wrappers/claude-skill/SKILL.md`. The manifest instructs Claude to gather tenant/app/site inputs, call the PowerShell installer, and run the Python orchestrator while keeping secrets out of transcripts.
-- **Gemini CLI Extension** – Defined in `wrappers/gemini-extension/gemini-extension.json`. Adds an `/audit` command that shells out to the orchestrator with safe argument quoting.
+- **Gemini CLI Extension** – Auto-discovered via the repo-root `gemini-extension.json`. Adds an `/audit` command that shells out to the orchestrator with safe argument quoting.
 
 ## Operational Flow
 ```

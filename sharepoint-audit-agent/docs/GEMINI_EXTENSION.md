@@ -4,6 +4,7 @@
 ```
 gemini extensions install https://github.com/Aqualia/Skills-Library --ref main
 ```
+The repository now surfaces `gemini-extension.json` at its root so Gemini CLI discovers the manifest automatically.
 
 ## Usage
 ```
